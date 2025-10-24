@@ -1,4 +1,6 @@
 pub mod biome;
 pub mod cell;
 pub mod game;
-const MAP_SIZE: usize = 8;
+pub const MAP_SIZE: usize = 8;
+pub use crate::{cell::Cell, biome::Biome, cell::State, game::Game};
+pub use::colored::Colorize;

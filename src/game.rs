@@ -1,5 +1,4 @@
-use crate::{cell::cell::Cell, MAP_SIZE, biome::biome::Biome, cell::cell::State};
-
+use crate::{Cell, Biome, State, MAP_SIZE, Colorize};
 pub struct Game {
     board: [[Cell; MAP_SIZE]; MAP_SIZE]
 }
@@ -32,9 +31,9 @@ impl Game {
         for row in self.board{
             for cell in row {
                 match cell.state {
-                    State::Empty => print!(" . "),
-                    State::Fresh => print!(" F "),
-                    State::Old => print!(" O "),
+                    State::Empty => print!("{}"," . "),
+                    State::Fresh => print!("{}"," F "),
+                    State::Old => print!("{}"," O "),
                 }
             }
             println!()
@@ -44,13 +43,13 @@ impl Game {
         for row in self.board{
             for cell in row {
                 match cell.biome {
-                    Biome::Empty => print!(" . "),
-                    Biome::Ocean => print!(" O "),
-                    Biome::Sea => print!(" S "),
-                    Biome::Coast => print!(" C "),
-                    Biome::Highlands => println!(" H "),
-                    Biome::Lowlands => println!(" L "),
-                    Biome::Mountains => println!(" M ")
+                    Biome::Empty => print!("{}"," . ".bright_black()),
+                    Biome::Ocean => print!("{}"," O ".blue()),
+                    Biome::Sea => print!("{}"," S ".bright_blue()),
+                    Biome::Coast => print!("{}"," C ".bright_yellow()),
+                    Biome::Highlands => println!("{}"," H ".yellow()),
+                    Biome::Lowlands => println!("{}"," L ".bright_green()),
+                    Biome::Mountains => println!("{}"," M ".green())
                 }
             }
             println!()
