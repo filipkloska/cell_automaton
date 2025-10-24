@@ -1,30 +1,44 @@
+use std::{cell, collections::VecDeque, mem::ManuallyDrop};
+
 use crate::{Cell, Biome, State, MAP_SIZE, Colorize};
 pub struct Game {
     board: [[Cell; MAP_SIZE]; MAP_SIZE]
 }
 
 impl Game {
+    
+    
+    /*Constructor initializing the board */
     pub fn new() -> Game {
-        // initialize board
         let board = 
         [[Cell{ biome: Biome::Empty, state: State::Empty}; MAP_SIZE]; MAP_SIZE];
         return Game {board: board};
     }
-    
-    pub fn run(&mut self) {
-        let mut step = 1;
+    /*Basic game loop */
+    pub fn run(&mut self, ) {
         let start_idx = MAP_SIZE/2;
-        // while step < MAP_SIZE * MAP_SIZE {
-            
-
-
-        // }
+        let mut transform_indices = VecDeque::from([(start_idx,start_idx)]);
+        
         self.board[start_idx][start_idx].transform_cell(Biome::Ocean);
+        for _ in 1..=MAP_SIZE*MAP_SIZE {
+            
+        }
         self.print_board_biome();
     }
 
-    fn calculate_neighbours(&self) {
 
+    /*Takes a queue of cell indices to calculate neighbours of each cell and transforms the board */
+    fn calculate_neighbours(&self, queue: &mut VecDeque<(usize,usize)>) {
+        for cell in queue {
+            
+        }
+    }
+
+    /*Looks for neighbours for the cell*/
+    fn find_neighbours(&self, cell_idx: (usize,usize)) -> Vec<(usize,usize)> {
+        let neighbours = Vec::<(usize,usize)>::new();
+        
+        return neighbours;
     }
 
     pub fn print_board_state(&self) {
