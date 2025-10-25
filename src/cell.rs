@@ -7,15 +7,16 @@ pub struct Cell {
 }
 
 //not sure if we need this, we can store fresh cells in an array in game
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub enum State{
     Empty,
-    Fresh,
-    Old,
+    Transformed,
+    Buffered,
 }
 
 impl Cell {
     pub fn transform_cell(&mut self, biome: Biome) {
         self.biome = biome;
+        self.state = State::Transformed
     }
 }
