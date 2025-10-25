@@ -1,4 +1,4 @@
-use std::{cell, collections::VecDeque, mem::ManuallyDrop};
+use std::{collections::VecDeque};
 
 use crate::{Cell, Biome, State, MAP_SIZE, Colorize};
 pub struct Game {
