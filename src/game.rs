@@ -21,30 +21,9 @@ impl Game {
         let mut transform_indices = 
             VecDeque::from([(start_idx,start_idx)]);
         
-        /*add to queue cells to transform
-            find neighbours of each 
-            neighbours = (pop_front.find)
-            next calculate values from all 8(calculate)
-            transform i-1 j, i+1 j, i j-1, i j+1
-            add these to queue
-            repeat 
-            */
-        // self.print_board_biome();
-        // self.print_board_state();
-        // while let Some(current) = transform_indices.pop_front() {
-        //     println!("{:?}", transform_indices);
-        //     let neighbours = self.find_neighbours(current);
-        //     let biome = self.calculate_neighbours(neighbours);
-        //     self.board[current.0][current.1].transform_cell(biome);
-            
-        //     let newly = self.find_adjacent_cells(current);
-        //     for n in newly {
-        //         transform_indices.push_back(n);
-        //     }
-        //     self.print_board_biome();
-        //     self.print_board_state();   
-        // }
+        
         while !transform_indices.is_empty() {
+            //next layer takes adjencent cells
             let mut next_layer = Vec::new();
             let layer_len = transform_indices.len();
             for _ in 0..layer_len {
@@ -52,8 +31,8 @@ impl Game {
                     Some(val) => val,
                     None => panic!("Popped empty queue")
                 };
-                let neighbours = self.find_neighbours(current);
-                let b = self.calculate_neighbours(neighbours);
+                let neighbours = self.find_cells_around(current);
+                let b = self.calculate_biome_for_cell(neighbours);
                 
                 self.board[current.0][current.1].transform_cell(b);
                 
@@ -62,6 +41,7 @@ impl Game {
                     next_layer.push(indices);
                 }
             }
+            //i think this will work for multithreading
             for &(i, j) in &next_layer {
                 self.board[i][j].state = State::Buffered;
             }
@@ -81,31 +61,32 @@ impl Game {
         let offsets = [(-1, 0), (1, 0), (0, -1), (0, 1)];
 
         for (oi, oj) in offsets {
-            if let (Some(ni), Some(nj)) = (i.checked_add_signed(oi), j.checked_add_signed(oj)) {
+            if let (Some(ni), Some(nj)) = 
+            (i.checked_add_signed(oi), j.checked_add_signed(oj)) {
                 if ni < MAP_SIZE && nj < MAP_SIZE {
                     match self.board[ni][nj].state {
                         State::Empty => {
                             self.board[ni][nj].state = State::Buffered;
                             adjacent.push((ni, nj));
                         }
-                    _ => continue, // Buffered lub Transformed → pomijamy
+                    _ => continue,
                     }
                 }
             }
         }
 
-    adjacent
+    return adjacent;
 }
 
 
     /*Takes a queue of cell indices to calculate neighbours of each cell and transforms the board */
     /*for now a place holder */
-    fn calculate_neighbours(&self, neighbours: Vec<(usize,usize)>) -> Biome {
+    fn calculate_biome_for_cell(&self, neighbours: Vec<(usize,usize)>) -> Biome {
         return Biome::Ocean;
     }
 
-    /*Looks for neighbours for the cell*/
-    fn find_neighbours(&self, (i, j): (usize, usize)) -> Vec<(usize, usize)> {
+    /*Looks for neighbours around the cell*/
+    fn find_cells_around(&self, (i, j): (usize, usize)) -> Vec<(usize, usize)> {
     let mut neighbours = Vec::new();
         for di in -1..=1 {
             for dj in -1..=1 {
@@ -113,8 +94,7 @@ impl Game {
                     continue;
                 }
                 if let (Some(ni), Some(nj)) = 
-                    (i.checked_add_signed(di), 
-                    j.checked_add_signed(dj)) {
+                (i.checked_add_signed(di), j.checked_add_signed(dj)) {
                     if ni < MAP_SIZE && nj < MAP_SIZE {
                         neighbours.push((ni, nj));
                     }
@@ -122,7 +102,7 @@ impl Game {
             }
         }
 
-    neighbours
+    return neighbours;
 }
     pub fn print_board_state(&self) {
         for row in self.board{
