@@ -64,12 +64,9 @@ impl Game {
             if let (Some(ni), Some(nj)) = 
             (i.checked_add_signed(oi), j.checked_add_signed(oj)) {
                 if ni < MAP_SIZE && nj < MAP_SIZE {
-                    match self.board[ni][nj].state {
-                        State::Empty => {
-                            self.board[ni][nj].state = State::Buffered;
-                            adjacent.push((ni, nj));
-                        }
-                    _ => continue,
+                    if let State::Empty = self.board[ni][nj].state {
+                        self.board[ni][nj].state = State::Buffered;
+                        adjacent.push((ni, nj));
                     }
                 }
             }
