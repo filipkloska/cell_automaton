@@ -1,5 +1,4 @@
-
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub enum Biome{
     Empty,
     Ocean,
@@ -9,8 +8,3 @@ pub enum Biome{
     Highlands,
     Mountains
 }
-
-impl Biome {
-    
-}
-

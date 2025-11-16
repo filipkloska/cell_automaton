@@ -1,6 +1,8 @@
 use std::{collections::VecDeque, usize};
-
-use crate::{Cell, Biome, State, MAP_SIZE, Colorize};
+use rand::Rng;
+use crate::{Biome, Cell, Colorize, MAP_SIZE, 
+    OCEAN_BIOME_CHANCE, SEA_BIOME_CHANCE, COAST_BIOME_CHANCE, 
+    State};
 pub struct Game {
     board: [[Cell; MAP_SIZE]; MAP_SIZE]
 }
@@ -13,9 +15,9 @@ impl Game {
         return Game {board: board};
     }
     /*Basic game loop */
+    
     pub fn run(&mut self) {
-        
-        
+        let mut densities: [f64; 6] = [0.99; 6];
         let start_idx = MAP_SIZE/2;
         self.board[start_idx][start_idx].transform_cell(Biome::Ocean);
         let mut transform_indices = 
@@ -31,20 +33,22 @@ impl Game {
                     Some(val) => val,
                     None => panic!("Popped empty queue")
                 };
-                let neighbours = self.find_cells_around(current);
-                let b = self.calculate_biome_for_cell(neighbours);
-                
-                self.board[current.0][current.1].transform_cell(b);
-                
                 let adjencent = self.find_adjacent_cells(current);
+                for indices in &adjencent {
+                    let around = self.find_cells_around((indices.0, indices.1));
+                    
+                    self.board[indices.0][indices.1].
+                    transform_cell(self.calculate_biome_for_cell(current,around, &mut densities));
+                }
+                
                 for indices in adjencent {
                     next_layer.push(indices);
                 }
             }
             //i think this will work for multithreading
-            for &(i, j) in &next_layer {
-                self.board[i][j].state = State::Buffered;
-            }
+            // for &(i, j) in &next_layer {
+            //     self.board[i][j].state = State::Buffered;
+            // }
 
             for n in next_layer {
                 transform_indices.push_back(n);
@@ -78,8 +82,64 @@ impl Game {
 
     /*Takes a queue of cell indices to calculate neighbours of each cell and transforms the board */
     /*for now a place holder */
-    fn calculate_biome_for_cell(&self, neighbours: Vec<(usize,usize)>) -> Biome {
-        return Biome::Ocean;
+    fn calculate_biome_for_cell(&self, cell: (usize, usize), neighbours: Vec<(usize,usize)>, densities: &mut [f64; 6]) -> Biome {
+        let mut chances: [f64; 6] = [0.0; 6];
+        
+        let mut mult = 1.0;
+
+        for (i, j) in neighbours {
+            
+            if self.board[i][j].biome == Biome::Empty {
+                continue;
+            }
+            if i != cell.0 && j != cell.1 {
+                mult = 0.5;
+            }
+            else {
+                mult = 1.0;
+            }
+            
+            match self.board[i][j].biome {
+                Biome::Ocean => {
+                    for i in 0..6 {
+                        chances[i] += OCEAN_BIOME_CHANCE[i] * mult * densities[i];
+                    }
+                    //densities[0] *= 0.99;
+                },
+                Biome::Sea => {
+                    for i in 0..6 {
+                        chances[i] += SEA_BIOME_CHANCE[i] * mult * densities[i];
+                    }
+                    //densities[1] *= 0.99;
+                },
+                Biome::Coast => {
+                    for i in 0..6 {
+                        chances[i] += COAST_BIOME_CHANCE[i] * mult * densities[i];
+                    }
+                    //densities[2] *= 0.99;
+                },
+                _ => {}
+            }
+        } 
+        let mut sum = 0.0;
+        
+        for val in &chances {
+            sum += *val;
+        }
+        for val in &mut chances {
+            *val /= sum;
+        }
+        
+        let probability: f64 = rand::rng().random_range(0..101) as f64 / 100.0;
+        if probability <= chances[0] {
+            Biome::Ocean
+        }
+        else if probability <= chances[0] + chances[1] {
+            Biome::Sea
+        }
+        else {
+            Biome::Coast
+        }
     }
 
     /*Looks for neighbours around the cell*/
@@ -120,7 +180,7 @@ impl Game {
                 match cell.biome {
                     Biome::Empty => print!("{}"," . ".bright_black()),
                     Biome::Ocean => print!("{}"," O ".blue()),
-                    Biome::Sea => print!("{}"," S ".bright_blue()),
+                    Biome::Sea => print!("{}"," S ".magenta()),
                     Biome::Coast => print!("{}"," C ".bright_yellow()),
                     Biome::Highlands => println!("{}"," H ".yellow()),
                     Biome::Lowlands => println!("{}"," L ".bright_green()),
@@ -129,5 +189,6 @@ impl Game {
             }
             println!()
         }
+        println!()
     }
 }
