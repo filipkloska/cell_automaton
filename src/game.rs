@@ -1,8 +1,6 @@
 use std::{collections::VecDeque, usize};
 use rand::Rng;
-use crate::{Biome, Cell, Colorize, MAP_SIZE, 
-    OCEAN_BIOME_CHANCE, SEA_BIOME_CHANCE, COAST_BIOME_CHANCE, 
-    State};
+use crate::{Biome, COAST_BIOME_CHANCE, Cell, Colorize, HIGHLANDS_BIOME_CHANCE, LOWLANDS_BIOME_CHANCE, MAP_SIZE, MOUNTAINS_BIOME_CHANCE, OCEAN_BIOME_CHANCE, SEA_BIOME_CHANCE, State};
 pub struct Game {
     board: [[Cell; MAP_SIZE]; MAP_SIZE]
 }
@@ -55,7 +53,8 @@ impl Game {
             }
             self.print_board_biome();
         }
-        
+        // self.print_board_biome();
+        // self.print_board_state();
     }
     
 
@@ -85,7 +84,7 @@ impl Game {
     fn calculate_biome_for_cell(&self, cell: (usize, usize), neighbours: Vec<(usize,usize)>, densities: &mut [f64; 6]) -> Biome {
         let mut chances: [f64; 6] = [0.0; 6];
         
-        let mut mult = 1.0;
+        let mut mult: f64;
 
         for (i, j) in neighbours {
             
@@ -93,7 +92,7 @@ impl Game {
                 continue;
             }
             if i != cell.0 && j != cell.1 {
-                mult = 0.5;
+                mult = 0.25;
             }
             else {
                 mult = 1.0;
@@ -118,16 +117,44 @@ impl Game {
                     }
                     //densities[2] *= 0.99;
                 },
+                Biome::Lowlands => {
+                    for i in 0..6 {
+                        chances[i] += LOWLANDS_BIOME_CHANCE[i] * mult * densities[i];
+                    }
+                    //densities[2] *= 0.99;
+                },
+                Biome::Highlands => {
+                    for i in 0..6 {
+                        chances[i] += HIGHLANDS_BIOME_CHANCE[i] * mult * densities[i];
+                    }
+                    //densities[2] *= 0.99;
+                },
+                Biome::Mountains => {
+                    for i in 0..6 {
+                        chances[i] += MOUNTAINS_BIOME_CHANCE[i] * mult * densities[i];
+                    }
+                    //densities[2] *= 0.99;
+                },
                 _ => {}
             }
         } 
-        let mut sum = 0.0;
-        
-        for val in &chances {
-            sum += *val;
-        }
+
         for val in &mut chances {
-            *val /= sum;
+            if *val < 0.0 {
+                *val = 0.0;
+            }
+        }
+        
+        let sum: f64 = chances.iter().sum();
+        
+        if sum == 0.0 { //If every biom is 0, all biomes are equally likely
+            for val in &mut chances {
+                *val = 1.0 / 6.0;
+            }
+        } else {
+            for val in &mut chances {
+                *val /= sum;
+            }
         }
         
         let probability: f64 = rand::rng().random_range(0..101) as f64 / 100.0;
@@ -137,8 +164,20 @@ impl Game {
         else if probability <= chances[0] + chances[1] {
             Biome::Sea
         }
-        else {
+        else if probability <= chances[0] + chances[1] + chances[2] {
             Biome::Coast
+        }
+        else if probability <= chances[0] + chances[1] + chances[2] + chances[3] {
+            Biome::Lowlands
+        }
+        else if probability <= chances[0] + chances[1] + chances[2] + chances[3] + chances[4] {
+            Biome::Highlands
+        }
+        else if probability <= chances[0] + chances[1] + chances[2] + chances[3] + chances[4] + chances[5] {
+            Biome::Mountains
+        }
+        else {
+            Biome::Empty
         }
     }
 
@@ -182,9 +221,9 @@ impl Game {
                     Biome::Ocean => print!("{}"," O ".blue()),
                     Biome::Sea => print!("{}"," S ".magenta()),
                     Biome::Coast => print!("{}"," C ".bright_yellow()),
-                    Biome::Highlands => println!("{}"," H ".yellow()),
-                    Biome::Lowlands => println!("{}"," L ".bright_green()),
-                    Biome::Mountains => println!("{}"," M ".green())
+                    Biome::Highlands => print!("{}"," H ".red()),
+                    Biome::Lowlands => print!("{}"," L ".bright_green()),
+                    Biome::Mountains => print!("{}"," M ".white())
                 }
             }
             println!()
