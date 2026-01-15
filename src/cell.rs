@@ -1,22 +1,13 @@
-use crate::{Biome};
-
-#[derive(Copy, Clone, Debug)]
-pub struct Cell {
-    pub biome: Biome,
-    pub state: State   
-}
-
-//not sure if we need this, we can store fresh cells in an array in game
+#[repr(u8)]
 #[derive(Copy, Clone, Debug, PartialEq)]
-pub enum State{
-    Empty,
-    Transformed,
-    Buffered,
+pub enum Biome{
+    Empty = 0,
+    Ocean = 1,
+    Sea = 2,
+    Coast = 3,
+    Lowlands = 4,
+    Highlands = 5,
+    Mountains = 6,
+    Checked = 7
 }
 
-impl Cell {
-    pub fn transform_cell(&mut self, biome: Biome) {
-        self.biome = biome;
-        self.state = State::Transformed
-    }
-}

@@ -6,3 +6,5 @@ edition = "2024"
 [dependencies]
 colored = "2"
 rand = "0.9.2"
+num_cpus = "1.1"
+minifb = "0.24"
