@@ -30,7 +30,9 @@ fn bench_gpu_scaling<const N:usize>(bencher: Bencher, thread_count: usize) {
         // Używamy with_inputs, aby kompilacja i setup nie wchodziły w czas pomiaru
         .with_inputs(|| setup_cuda::<N>())
         .bench_values(|(dev, mut game)| {
-            game.run_parallel_gpu(black_box(dev.clone()), black_box(thread_count));
+            game.run_parallel_gpu(black_box(dev.clone()), 
+            black_box(thread_count), 
+            black_box((16,16)));
         });
 }
 

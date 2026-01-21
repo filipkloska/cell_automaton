@@ -6,8 +6,8 @@ use std::sync::Arc;
 use std::fs;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    //cpu_main();
-    gpu_main();
+    cpu_main();
+    //gpu_main();
     Ok(())
 }
 
@@ -16,7 +16,7 @@ fn gpu_main()
 {
     let (dev,mut game) = setup_cuda::<1024>();
     println!("CPU simulation start...");
-    game.run_parallel_gpu(dev,4);
+    game.run_parallel_gpu(dev,4, (16,16));
     println!("End of simulation.");
     visualization::visualize(&game);
 }
@@ -25,9 +25,9 @@ fn gpu_main()
 fn cpu_main() {
     let mut game = Game::<1024>::new(); 
     println!("CPU simulation start...");
-    game.run(4);
+    game.run(1);
     println!("End of simulation.");
-    visualization::visualize(&game);
+    //visualization::visualize(&game);
 }
 
 fn setup_cuda<const N: usize >() -> (Arc<CudaDevice>, Game<N>) {

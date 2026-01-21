@@ -1,9 +1,11 @@
 use rand::Rng;
+use rand::rand_core::block;
 use crate::{ Biome, COAST_BIOME_CHANCE, HIGHLANDS_BIOME_CHANCE, LOWLANDS_BIOME_CHANCE, MAP_SIZE, MOUNTAINS_BIOME_CHANCE, OCEAN_BIOME_CHANCE, READ_WINDOW_HEIGHT, READ_WINDOW_WIDTH, SAFETY_OFFSET_SIZE, SEA_BIOME_CHANCE};
 use cudarc::driver::{CudaDevice, CudaFunction, CudaSlice, CudaStream, DeviceRepr, LaunchAsync, LaunchConfig};
 use core::slice;
 use std::collections::VecDeque;
 use std::os::windows::thread;
+use std::str::SplitWhitespace;
 use std::sync::Arc;
 //N is the mapsize
 pub struct Game<const N: usize>  {
@@ -80,119 +82,114 @@ impl<const N: usize> Game<N> {
             }
         });
     }
-    pub fn run_parallel_gpu(&mut self, dev: Arc<CudaDevice>, thread_count: usize) {
-        let step_fn = dev.get_func("cell_automaton", "biome_step").expect("Nie znaleziono kernela");
-        let offsets = self.calculate_offsets(thread_count);
-        if thread_count == 1
-        {
-            Game::process_slice_gpu(&mut self.board, LimitOffsets { read_up_offset: 0, read_down_offset: 0 }, dev.clone(), step_fn.clone(), 0);
-            return;
-        }
+    pub fn run_parallel_gpu(&mut self, dev: Arc<CudaDevice>, spawn_count: usize, (block_size_x,block_size_y): (u32,u32)) {
+        let step_fn = dev.get_func("cell_automaton", "biome_step").expect("biome_step not found");
+        let setup_fn = dev.get_func("cell_automaton", "setup_rand").expect("setup_rand not found");
         
-        let (normal_slices, safety_slices) = unsafe {
-            self.setup_slices(thread_count)
-        };
-        std::thread::scope(|s|
+        //calculate spawn lens
+        let offsets = self.calculate_offsets(spawn_count);
+        let slice_lens = self.calculate_normal_slice_lens(spawn_count);
+        println!("{slice_lens:?}");
+        let mut y_index = 0;
+        for i in 0..spawn_count
         {
-            for (i,(slice, current_offset)) in normal_slices.into_iter().zip(offsets.into_iter()).enumerate() 
-            {   
-                let step_fn_clone = step_fn.clone();
-                let dev_clone = dev.clone();
-                
-                s.spawn(move ||
-                {
-                    Game::process_slice_gpu(slice, current_offset, dev_clone, step_fn_clone,i);
-                });
-            }
-        });
-        std::thread::scope(|s| {
-            for (i, slice) in safety_slices.into_iter().enumerate() {
-                let offsets = LimitOffsets {
-                    read_up_offset: 0,
-                    read_down_offset:0,
-                };
-                let step_fn_clone = step_fn.clone();
-                let dev_clone = dev.clone();
-                s.spawn(move || {
-                    Game::process_slice_gpu(slice, offsets, dev_clone, step_fn_clone, i);
-                });
-            }
-        });
-    }
-    pub fn process_slice_gpu(slice: &mut [[Biome; N]], offsets: LimitOffsets, dev: Arc<CudaDevice>, step_fn: CudaFunction, slice_index: usize)
-    {
-        //println!("GPU Thread {} with slice length of {}.", slice_index, slice.len());
+            self.board[y_index + slice_lens[i]/2][self.map_size/2] = Biome::Ocean;
+            y_index += slice_lens[i]
+        }
+
         let width = N as i32;
-        let height = slice.len() as i32;
-        let num_pixels = N * slice.len();
+        let height = self.board.len() as i32;
+        let num_pixels = N * self.board.len();
 
 
+        let flat_data: Vec<u8> = self.board.iter().flatten().map(|&b| b as u8).collect();
         //5 bytes + 1 for states times number of pixels
+
         let mut rng_states = dev.alloc_zeros::<u8>(num_pixels * 48).expect("Allocation error for RNG states");
 
-
-        let setup_fn = dev.get_func("cell_automaton", "setup_rand").expect("setup_rand not found");
-
-        let cfg = LaunchConfig::for_num_elems(num_pixels as u32);
-        let seed = 67u32 + slice_index as u32;
+        let cfg_rng = LaunchConfig::for_num_elems(num_pixels as u32);
         unsafe { 
-            setup_fn.launch(cfg, (&mut rng_states, seed, width as i32, height as i32)) 
+            setup_fn.launch(cfg_rng, (&mut rng_states, 67u32, width, height)) 
         }.expect("Could not launch setup_rand kernel");
         
-        
-        
-        slice[slice.len() / 2][N / 2] = Biome::Mountains;
-        let mut flat_data: Vec<u8> = slice
-            .iter()
-            .flatten()
-            .map(|&biome| biome as u8)
-            .collect();
-
-        let mut d_in: CudaSlice<u8> = dev.htod_copy(flat_data.clone()).expect("Allocation error for slice data input");
+        let mut d_in = dev.htod_copy(flat_data.clone()).expect("Allocation error for slice data input");
         let mut d_out = dev.htod_copy(flat_data).expect("Allocation error for slice data output");
+        
+        //lil trick for guarenteeing that there are always threads when map is f.e. width 20 height 20
+        let grid_x = (width as u32 + block_size_x - 1) / block_size_x;
+        let grid_y = (height as u32 + block_size_y - 1) / block_size_y;
         let cfg = LaunchConfig {
             grid_dim: (
-                ((width as u32 + 15) / 16),
-                ((height as u32 + 15) / 16),
+                grid_x,
+                grid_y,
                 1,
             ),
-            block_dim: (16, 16, 1),
+            block_dim: (block_size_x, block_size_y, 1),
             shared_mem_bytes: 0,
         };
-        //println!("Read up offset: {}, read down offset: {}", offsets.read_up_offset, offsets.read_down_offset);
-        let write_y_start = if offsets.read_up_offset > 0 { 0 } else { READ_WINDOW_HEIGHT as i32 };
-        let write_y_end = if offsets.read_down_offset > 0 { height} else { height - (READ_WINDOW_HEIGHT as i32) };
-        for i in 0..N{
+
+        let mut borders = Vec::<i32>::new();
+        let mut border_y_index = 0;
+
+        for i in 0..spawn_count-1
+        {
+            border_y_index += (self.map_size/spawn_count) as i32;
+            //start inclusive in cuda, end exclusicve
+            let zone_start = border_y_index - SAFETY_OFFSET_SIZE as i32;
+            let zone_end = border_y_index + SAFETY_OFFSET_SIZE as i32;
+            borders.push(zone_start); 
+            borders.push(zone_end);
+        }
+        println!("Doctors with borders {:?}", borders);
+        let mut d_borders = dev.htod_copy(borders.clone()).expect("Allocation error for slice data output");
+        
+        let normal_loop_size = (N/2 + 1) + *slice_lens.iter().max().unwrap() + 1;
+        let safety_loop_size = (N/2 + 1) + SAFETY_OFFSET_SIZE + 1;
+        for i in 0..normal_loop_size{
             unsafe {
                 step_fn.clone().launch(cfg, (
                     &d_in,     
                     &mut d_out,
                     &mut rng_states,
+                    &d_borders,
+                    borders.len(),
                     width,
                     height,
                     READ_WINDOW_HEIGHT as i32,
                     READ_WINDOW_WIDTH as i32,
-                    write_y_start,
-                    write_y_end,
+                    true, //normal phase
                 )).expect("Could not launch step kernel");
             }
             std::mem::swap(&mut d_in, &mut d_out);
         }
-
-
-        //println!("GPU Thread {} finished processing.", slice_index);
+        for i in 0..safety_loop_size{
+            unsafe {
+                step_fn.clone().launch(cfg, (
+                    &d_in,     
+                    &mut d_out,
+                    &mut rng_states,
+                    &d_borders,
+                    borders.len(),
+                    width,
+                    height,
+                    READ_WINDOW_HEIGHT as i32,
+                    READ_WINDOW_WIDTH as i32,
+                    false, //safety phase
+                )).expect("Could not launch step kernel");
+            }
+            std::mem::swap(&mut d_in, &mut d_out);
+        }
         let final_flat = dev.dtoh_sync_copy(&d_in).expect("Błąd pobierania danych z GPU");
 
         //map to slice
         for (row_idx, row_data) in final_flat.chunks(N).enumerate() {
             for (col_idx, &val) in row_data.iter().enumerate() {
-                slice[row_idx][col_idx] = unsafe { std::mem::transmute(val) };
+                self.board[row_idx][col_idx] = unsafe { std::mem::transmute(val) };
             }
         }
-        
-        //println!("GPU: Slice o wysokości {} pomyślnie przepisany do board.", height);
-        //Game::count_filled_pixels(slice, MAP_SIZE, slice.len());
+
     }
+
 
     fn count_filled_pixels(slice: &[[Biome; N]], width: usize, height: usize) -> usize {
         let mut count = 0;

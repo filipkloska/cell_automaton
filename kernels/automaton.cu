@@ -29,7 +29,7 @@ extern "C" __global__ void setup_rand(
 }
 
 
-__constant__ double GPU_CHANCES[6][6] = {
+__constant__ float GPU_CHANCES[6][6] = {
     {0.8, 0.2, 0.1, 0.0, -0.1, -0.1}, 
     {0.2, 0.2, 0.8, 0.0, -0.1, -0.1},
     {0.1, 0.2, 0.1, 0.6, 0.0, 0.0},
@@ -43,12 +43,14 @@ extern "C" __global__ void biome_step(
     const u8* input,
     u8* output,
     curandState* states,
+    const int* borders,
+    int num_borders,
     int width,
     int height,
     int read_window_height,
     int read_window_width,
-    int write_y_start, 
-    int write_y_end) 
+    bool is_normal_phase
+) 
 {
     //coords of the pixel
     int x = blockIdx.x * blockDim.x + threadIdx.x;
@@ -59,15 +61,27 @@ extern "C" __global__ void biome_step(
     {
         return;
     }
-    //get the value from the coords + check if it's already filled
+    //get the value from the coords 
     int idx = y * width + x;
     u8 current = input[idx];
+    
+    //check if it's already filled
     if (current > 0 && current <= 6) {
         output[idx] = current;
         return;
     }
-    //avoid safety offset areas
-    if (y < write_y_start || y >= write_y_end ) {
+    //avoid safety offset areas if not in safety phase
+    bool in_safety_zone = false;
+    for(int i = 0; i < num_borders * 2; i+=2)
+    {
+        if(y >= borders[i] && y < borders[i+1])
+        {
+            in_safety_zone = true;
+            break;
+        }
+    }
+    
+    if (is_normal_phase == in_safety_zone) {
         output[idx] = current; 
         return;
     }
